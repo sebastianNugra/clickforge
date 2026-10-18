@@ -27,9 +27,14 @@ STOPPED = "#f87171"
 OVERLAY_W = 320
 CONFIG_PATH = Path.home() / ".clickforge.json"
 
-# unidades del tiempo de ejecución: clave interna -> etiqueta en la UI
+# unidades de tiempo: clave interna -> etiqueta en la UI
 UNITS = {"seconds": "segundos", "minutes": "minutos", "hours": "horas"}
+# etiquetas para el ritmo: "30 clics por minuto"
+RATE_UNITS = {"seconds": "por segundo", "minutes": "por minuto", "hours": "por hora"}
+UNIT_SHORT = {"seconds": "s", "minutes": "min", "hours": "h"}
 UNIT_SECONDS = {"seconds": 1, "minutes": 60, "hours": 3600}
+
+MAX_CLICKS_PER_SECOND = 100.0  # límite de seguridad de la app
 
 
 class ClickForgeApp:
@@ -38,14 +43,19 @@ class ClickForgeApp:
         root.withdraw()  # la ventana raíz no se ve; solo existen las "pantallas"
 
         self._clicker = AutoClicker()
+        # ritmo: "rate_value clics por rate_unit" (por defecto 10 por segundo)
+        self._rate_value: float = 10.0
+        self._rate_unit: str = "seconds"  # seconds | minutes | hours
         self._duration_value = 0  # 0 = sin límite
         self._duration_unit = "seconds"  # seconds | minutes | hours
-        self._load_config()
 
         self.guide: tk.Toplevel | None = None
         self.overlay: tk.Toplevel | None = None
         self._settings: tk.Toplevel | None = None
         self._cps_quick: tk.Entry | None = None
+        self._rate_unit_label: tk.Label | None = None
+
+        self._load_config()
 
         self._point_var = tk.StringVar(value="sin capturar")
         self._state_var = tk.StringVar(value="detenido")
@@ -70,7 +80,7 @@ class ClickForgeApp:
     def _show_guide(self) -> None:
         win = tk.Toplevel(self.root)
         win.title("ClickForge — Bienvenido")
-        self._center(win, 580, 560)
+        self._center(win, 600, 620)
         win.resizable(False, False)
         win.configure(bg=PANEL_BG)
         win.protocol("WM_DELETE_WINDOW", self.quit)
@@ -86,10 +96,12 @@ class ClickForgeApp:
             ("2.", "Coloca el mouse justo sobre el lugar donde quieres hacer clic\n"
                    "y pulsa F8 para capturar ese punto."),
             ("3.", "Pulsa F6 para empezar a hacer clics, y F6 otra vez para detener."),
-            ("4.", "En ⚙ Configuración cambias los clicks/s y el tiempo de\n"
-                   "ejecución (segundos, minutos u horas; 0 = sin límite).\n"
-                   "También puedes escribir los clicks/s directo en la barra."),
-            ("5.", "Para salir: el cuadro rojo con ✗ en la esquina superior\nderecha de la barra."),
+            ("4.", "El ritmo se ajusta en la barra (escribe los clics en la esquina)\n"
+                   "o en ⚙ Configuración: por segundo, minuto u hora.\n"
+                   "Ej.: 30 clics por minuto = 1 clic cada 2 segundos."),
+            ("5.", "En ⚙ también defines el tiempo de ejecución (segundos, minutos\n"
+                   "u horas; 0 = sin límite) y la app se detiene sola al terminar."),
+            ("6.", "Para salir: el cuadro rojo con ✗ en la esquina superior derecha."),
         ]
         box = tk.Frame(win, bg=PANEL_BG)
         box.pack(fill="x", padx=36)
@@ -151,16 +163,18 @@ class ClickForgeApp:
                         font=("Segoe UI", 9))
         gear.pack(side="right", padx=(4, 6))
         gear.bind("<Button-1>", lambda _e: self._show_settings())
-        # contador de clicks/s editable directo en la esquina de la barra
+        # ritmo editable directo en la esquina de la barra (en la unidad activa)
         self._cps_quick = tk.Entry(title, width=5, justify="center",
                                    bg=BORDER, fg=PANEL_FG, insertbackground=PANEL_FG,
                                    relief="flat", font=("Segoe UI", 9))
         self._cps_quick.pack(side="right", ipady=2)
-        self._cps_quick.insert(0, self._cps_display())
+        self._cps_quick.insert(0, self._rate_display())
         self._cps_quick.bind("<Return>", lambda _e: self._apply_quick_cps())
         self._cps_quick.bind("<FocusOut>", lambda _e: self._apply_quick_cps())
-        tk.Label(title, text="clics/s  ", bg=PANEL_BG, fg=MUTED,
-                 font=("Segoe UI", 8)).pack(side="right")
+        self._rate_unit_label = tk.Label(
+            title, text=f"clics/{UNIT_SHORT[self._rate_unit]}  ",
+            bg=PANEL_BG, fg=MUTED, font=("Segoe UI", 8))
+        self._rate_unit_label.pack(side="right")
 
         # estado
         status = tk.Frame(panel, bg=PANEL_BG)
@@ -200,7 +214,7 @@ class ClickForgeApp:
 
         win = tk.Toplevel(self.root)
         win.title("ClickForge — Configuración")
-        self._center(win, 360, 320)
+        self._center(win, 400, 380)
         win.resizable(False, False)
         win.configure(bg=PANEL_BG)
         win.attributes("-topmost", True)
@@ -209,19 +223,31 @@ class ClickForgeApp:
         tk.Label(win, text="⚙  Configuración", font=("Segoe UI", 13, "bold"),
                  bg=PANEL_BG, fg=PANEL_FG).pack(pady=(18, 12))
 
+        # ritmo: cuántos clics por segundo / minuto / hora
         row = tk.Frame(win, bg=PANEL_BG)
         row.pack(fill="x", padx=28)
-        tk.Label(row, text="Clicks por segundo:", bg=PANEL_BG, fg=PANEL_FG).pack(side="left")
+        tk.Label(row, text="Ritmo de clics:", bg=PANEL_BG, fg=PANEL_FG).pack(side="left")
 
-        self._cps_var = tk.DoubleVar(value=round(self._clicker.clicks_per_second, 1))
-        spin = tk.Spinbox(row, from_=1, to=100, increment=1, width=6,
-                          textvariable=self._cps_var, command=self._apply_settings)
-        spin.pack(side="right")
-        spin.bind("<Return>", lambda _e: self._apply_settings())
+        self._rate_var = tk.DoubleVar(value=self._rate_value)
+        rate_spin = tk.Spinbox(row, from_=1, to=6000, increment=1, width=6,
+                               textvariable=self._rate_var, command=self._apply_settings)
+        rate_spin.pack(side="right")
+        rate_spin.bind("<Return>", lambda _e: self._apply_settings())
+
+        self._rate_unit_var = tk.StringVar(value=RATE_UNITS[self._rate_unit])
+        rate_unit = ttk.Combobox(row, textvariable=self._rate_unit_var, state="readonly",
+                                 values=list(RATE_UNITS.values()), width=12)
+        rate_unit.pack(side="right", padx=6)
+        rate_unit.bind("<<ComboboxSelected>>", lambda _e: self._apply_settings())
+
+        # resultado del cálculo, para que se entienda el ritmo
+        self._interval_var = tk.StringVar(value="→ " + self._interval_text())
+        tk.Label(win, textvariable=self._interval_var, bg=PANEL_BG, fg=RUNNING,
+                 font=("Segoe UI", 9, "italic")).pack(pady=(6, 0), padx=28, anchor="w")
 
         # tiempo total de ejecución (0 = infinito), con unidad seleccionable
         row2 = tk.Frame(win, bg=PANEL_BG)
-        row2.pack(fill="x", padx=28, pady=(14, 0))
+        row2.pack(fill="x", padx=28, pady=(16, 0))
         tk.Label(row2, text="Tiempo de ejecución:", bg=PANEL_BG, fg=PANEL_FG).pack(side="left")
 
         self._dur_var = tk.DoubleVar(value=self._duration_in(self._duration_value, reverse=True))
@@ -236,11 +262,11 @@ class ClickForgeApp:
         unit.pack(side="right", padx=6)
         unit.bind("<<ComboboxSelected>>", lambda _e: self._apply_settings())
 
-        tk.Label(win, text="0 = sin límite (corre hasta que pulses F6).\n"
-                           "Ej.: 30 segundos, 5 minutos, 2 horas.\n"
-                           "La velocidad es de 1 a 100 clicks/s.\n"
+        tk.Label(win, text="Ej.: 30 clics por minuto → 1 clic cada 2 s.\n"
+                           "El ritmo se calcula solo, no hace falta poner segundos.\n"
+                           "Tiempo de ejecución 0 = sin límite (hasta pulsar F6).\n"
                            "Todo se guarda para la próxima vez.",
-                 bg=PANEL_BG, fg=MUTED, justify="left").pack(pady=(14, 0), padx=28, anchor="w")
+                 bg=PANEL_BG, fg=MUTED, justify="left").pack(pady=(16, 0), padx=28, anchor="w")
 
         tk.Button(win, text="Listo", bg=RUNNING, fg="#0b0c10", relief="flat",
                   font=("Segoe UI", 10, "bold"), padx=18, pady=4, cursor="hand2",
@@ -253,19 +279,57 @@ class ClickForgeApp:
         factor = UNIT_SECONDS[self._duration_unit]
         return value / factor if reverse else value * factor
 
+    def _duration_in(self, value: float, reverse: bool = False) -> float:
+        """Convierte entre la unidad elegida y segundos."""
+        factor = UNIT_SECONDS[self._duration_unit]
+        return value / factor if reverse else value * factor
+
+    # ------------------------------------------------------------ ritmo
+    def _apply_rate(self) -> None:
+        """Convierte el ritmo (clics por unidad) a clicks/segundo del motor."""
+        cps = self._rate_value / UNIT_SECONDS[self._rate_unit]
+        self._clicker.clicks_per_second = min(MAX_CLICKS_PER_SECOND, cps)
+        # mantiene el atajo de la barra sincronizado (valor y unidad)
+        if self._cps_quick is not None:
+            self._cps_quick.delete(0, "end")
+            self._cps_quick.insert(0, self._rate_display())
+        if self._rate_unit_label is not None:
+            self._rate_unit_label.configure(text=f"clics/{UNIT_SHORT[self._rate_unit]}  ")
+
+    def _rate_display(self) -> str:
+        value = self._rate_value
+        return f"{value:.0f}" if value == int(value) else f"{value:.2f}".rstrip("0").rstrip(".")
+
+    def _interval_text(self) -> str:
+        """Cálculo visible para el usuario: '30 clics/min → 1 clic cada 2 s'."""
+        if self._rate_value <= 0:
+            return "sin clics"
+        seconds = UNIT_SECONDS[self._rate_unit] / self._rate_value
+        if seconds >= 3600:
+            return f"1 clic cada {seconds / 3600:.2f} h"
+        if seconds >= 60:
+            return f"1 clic cada {seconds / 60:.2f} min"
+        if seconds >= 1:
+            return f"1 clic cada {seconds:.2f} s"
+        return f"{1 / seconds:.1f} clics por segundo"
+
     def _apply_settings(self) -> None:
         try:
-            cps = float(self._cps_var.get())
+            rate = float(self._rate_var.get())
             dur = float(self._dur_var.get())
         except (tk.TclError, ValueError):
             return
-        cps = min(100.0, max(1.0, cps))
-        self._cps_var.set(round(cps, 1))
-        self._clicker.clicks_per_second = cps
+        rate = min(6000.0, max(1.0, rate))
+        self._rate_var.set(round(rate, 2))
+        self._rate_value = rate
+        self._rate_unit = next(
+            (k for k, v in RATE_UNITS.items() if v == self._rate_unit_var.get()), "seconds"
+        )
+        self._apply_rate()
+        self._interval_var.set("→ " + self._interval_text())
 
-        unit = self._unit_var.get()
         self._duration_unit = next(
-            (k for k, v in UNITS.items() if v == unit), "seconds"
+            (k for k, v in UNITS.items() if v == self._unit_var.get()), "seconds"
         )
         dur = min(999.0, max(0.0, dur))
         self._dur_var.set(dur)
@@ -274,25 +338,21 @@ class ClickForgeApp:
         self._clicker.duration = self._duration_in(dur)
         self._save_config()
 
-    def _cps_display(self) -> str:
-        cps = self._clicker.clicks_per_second
-        return f"{cps:.0f}" if cps == int(cps) else f"{cps:.1f}"
-
     def _apply_quick_cps(self) -> None:
-        """Aplica el valor escrito en el atajo de la barra (esquina)."""
+        """Lee el ritmo escrito en el atajo de la barra (en la unidad activa)."""
         if self.overlay is None or self._cps_quick is None:
             return
         try:
-            cps = float(self._cps_quick.get().replace(",", "."))
+            rate = float(self._cps_quick.get().replace(",", "."))
         except ValueError:
             pass
         else:
-            cps = min(100.0, max(1.0, cps))
-            self._clicker.clicks_per_second = cps
+            self._rate_value = min(6000.0, max(1.0, rate))
+            self._apply_rate()
             self._save_config()
         # siempre se reescribe el valor normalizado
         self._cps_quick.delete(0, "end")
-        self._cps_quick.insert(0, self._cps_display())
+        self._cps_quick.insert(0, self._rate_display())
 
     def _close_settings(self, win: tk.Toplevel) -> None:
         self._apply_settings()
@@ -302,19 +362,28 @@ class ClickForgeApp:
     def _load_config(self) -> None:
         try:
             data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
-            self._clicker.clicks_per_second = float(data["clicks_per_second"])
+            # compatibilidad con la config vieja ("clicks_per_second")
+            if "rate_value" in data:
+                self._rate_value = max(1.0, float(data["rate_value"]))
+                if data.get("rate_unit") in RATE_UNITS:
+                    self._rate_unit = data["rate_unit"]
+            elif "clicks_per_second" in data:
+                self._rate_value = float(data["clicks_per_second"])
+                self._rate_unit = "seconds"
             self._duration_value = max(0, int(data.get("duration_value", 0)))
             if data.get("duration_unit") in UNITS:
                 self._duration_unit = data["duration_unit"]
             self._clicker.duration = self._duration_in(self._duration_value)
-        except (OSError, KeyError, ValueError, TypeError):
+        except (OSError, ValueError, TypeError):
             pass  # sin config válida: se usa el valor por defecto
+        self._apply_rate()
 
     def _save_config(self) -> None:
         try:
             CONFIG_PATH.write_text(
                 json.dumps({
-                    "clicks_per_second": self._clicker.clicks_per_second,
+                    "rate_value": self._rate_value,
+                    "rate_unit": self._rate_unit,
                     "duration_value": self._duration_value,
                     "duration_unit": self._duration_unit,
                 }),
@@ -353,8 +422,8 @@ class ClickForgeApp:
             self._point_var.set(f"({x}, {y})")
 
         running = self._clicker.running
-        cps_text = self._cps_display()
-        state = f"ejecutando · {cps_text} clics/s" if running else f"detenido · {cps_text} clics/s"
+        rate = f"{self._rate_display()} clics/{UNIT_SHORT[self._rate_unit]}"
+        state = f"ejecutando · {rate}" if running else f"detenido · {rate}"
         remaining = self._clicker.remaining_seconds
         if remaining is not None:
             m, s = divmod(int(remaining), 60)
