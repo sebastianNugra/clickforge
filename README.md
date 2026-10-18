@@ -17,8 +17,9 @@ App de escritorio (Windows) hecha con Python y tkinter.
 - Overlay translúcido, sin bordes, siempre encima y arrastrable.
 - **F8** → comenzar / capturar el punto de clic (posición actual del mouse).
 - **F6** → iniciar / detener el autoclicker (globales, funcionan sin foco).
-- Velocidad ajustable de **1 a 100 clicks por segundo**, editable desde la
-  esquina de la barra o desde ⚙ Configuración.
+- **Ritmo de clics configurable** por segundo, minuto u hora: la app calcula
+  sola el intervalo. Ej.: **30 clics por minuto → 1 clic cada 2 segundos**.
+  Se edita en la esquina de la barra o en ⚙ Configuración.
 - **Tiempo de ejecución configurable**: segundos, minutos u horas
   (0 = sin límite). Si pones, por ejemplo, 5 minutos, el autoclicker se
   detiene solo al terminar el tiempo.
@@ -37,13 +38,15 @@ App de escritorio (Windows) hecha con Python y tkinter.
 4. **Ejecuta:** pulsa **F6** (o el botón *F6 Iniciar* de la barra). El punto
    del indicador se vuelve verde y los clics empiezan. **F6** otra vez para
    detener.
-5. **Configura** (⚙): velocidad en clicks/s y tiempo de ejecución con su
-   unidad (segundos / minutos / horas; 0 = sin límite). También puedes
-   escribir los clicks/s directo en el campo de la esquina de la barra.
+5. **Configura el ritmo** (⚙): cuántos clics por **segundo, minuto u hora**;
+   la app calcula el intervalo (ej.: 30 clics/min = 1 clic cada 2 s) y lo
+   muestra en vivo. También puedes escribir el valor directo en el campo de
+   la esquina de la barra.
+6. **Tiempo de ejecución** (⚙): segundos, minutos u horas; 0 = sin límite.
    Todo se aplica al instante y se guarda.
-6. **Tiempo restante:** si configuraste un tiempo, la barra muestra un
+7. **Tiempo restante:** si configuraste un tiempo, la barra muestra un
    contador `⏳mm:ss` y el autoclicker se detiene solo al llegar a cero.
-7. **Salir:** el **cuadro rojo con ✗** en la esquina superior derecha de la
+8. **Salir:** el **cuadro rojo con ✗** en la esquina superior derecha de la
    barra, o el botón rojo *⏻ Salir de ClickForge* en la bienvenida.
 
 > 💡 La barra se puede arrastrar con el mouse a donde quieras; el punto
