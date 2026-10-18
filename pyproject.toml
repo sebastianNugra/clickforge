@@ -1,6 +1,6 @@
 [project]
 name = "clickforge"
-version = "0.1.0"
+version = "1.1.0"
 description = "Autoclicker de escritorio con overlay discreto, atajos globales y vista de clicks por segundo"
 readme = "README.md"
 license = { text = "MIT" }
