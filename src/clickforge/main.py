@@ -10,6 +10,7 @@ from __future__ import annotations
 import json
 import tkinter as tk
 from pathlib import Path
+from tkinter import ttk
 
 from pynput import keyboard
 
@@ -26,6 +27,10 @@ STOPPED = "#f87171"
 OVERLAY_W = 320
 CONFIG_PATH = Path.home() / ".clickforge.json"
 
+# unidades del tiempo de ejecución: clave interna -> etiqueta en la UI
+UNITS = {"seconds": "segundos", "minutes": "minutos", "hours": "horas"}
+UNIT_SECONDS = {"seconds": 1, "minutes": 60, "hours": 3600}
+
 
 class ClickForgeApp:
     def __init__(self, root: tk.Tk) -> None:
@@ -33,6 +38,8 @@ class ClickForgeApp:
         root.withdraw()  # la ventana raíz no se ve; solo existen las "pantallas"
 
         self._clicker = AutoClicker()
+        self._duration_value = 0  # 0 = sin límite
+        self._duration_unit = "seconds"  # seconds | minutes | hours
         self._load_config()
 
         self.guide: tk.Toplevel | None = None
@@ -57,7 +64,7 @@ class ClickForgeApp:
     def _show_guide(self) -> None:
         win = tk.Toplevel(self.root)
         win.title("ClickForge — Bienvenido")
-        win.geometry("580x500")
+        win.geometry("580x560")
         win.resizable(False, False)
         win.configure(bg=PANEL_BG)
         win.protocol("WM_DELETE_WINDOW", self.quit)
@@ -73,8 +80,10 @@ class ClickForgeApp:
             ("2.", "Coloca el mouse justo sobre el lugar donde quieres hacer clic\n"
                    "y pulsa F8 para capturar ese punto."),
             ("3.", "Pulsa F6 para empezar a hacer clics, y F6 otra vez para detener."),
-            ("4.", "La velocidad se cambia en la barra (escribe los clicks/s en la\n"
-                   "esquina) o con el icono ⚙ de configuración."),
+            ("4.", "En ⚙ Configuración cambias los clicks/s y el tiempo de\n"
+                   "ejecución (segundos, minutos u horas; 0 = sin límite).\n"
+                   "También puedes escribir los clicks/s directo en la barra."),
+            ("5.", "Para salir: el cuadro rojo con ✗ en la esquina superior\nderecha de la barra."),
         ]
         box = tk.Frame(win, bg=PANEL_BG)
         box.pack(fill="x", padx=36)
@@ -125,24 +134,27 @@ class ClickForgeApp:
         self._dot.pack(side="left")
         tk.Label(title, text="  ClickForge", bg=PANEL_BG, fg=PANEL_FG,
                  font=("Segoe UI", 10, "bold")).pack(side="left")
+        # esquina superior derecha: cuadro rojo con X para salir
+        close_box = tk.Label(title, text="✕", bg="#e5484d", fg="white",
+                             font=("Segoe UI", 11, "bold"), padx=7, pady=1,
+                             cursor="hand2")
+        close_box.pack(side="right")
+        close_box.bind("<Button-1>", lambda _e: self.quit())
+
         gear = tk.Label(title, text=" ⚙ ", bg=PANEL_BG, fg=MUTED, cursor="hand2",
                         font=("Segoe UI", 9))
-        gear.pack(side="right")
+        gear.pack(side="right", padx=(4, 6))
         gear.bind("<Button-1>", lambda _e: self._show_settings())
         # contador de clicks/s editable directo en la esquina de la barra
         self._cps_quick = tk.Entry(title, width=5, justify="center",
                                    bg=BORDER, fg=PANEL_FG, insertbackground=PANEL_FG,
                                    relief="flat", font=("Segoe UI", 9))
-        self._cps_quick.pack(side="right", padx=(0, 4), ipady=2)
+        self._cps_quick.pack(side="right", ipady=2)
         self._cps_quick.insert(0, self._cps_display())
         self._cps_quick.bind("<Return>", lambda _e: self._apply_quick_cps())
         self._cps_quick.bind("<FocusOut>", lambda _e: self._apply_quick_cps())
-        tk.Label(title, text="/s", bg=PANEL_BG, fg=MUTED,
+        tk.Label(title, text="clics/s  ", bg=PANEL_BG, fg=MUTED,
                  font=("Segoe UI", 8)).pack(side="right")
-        close = tk.Label(title, text=" ✕ ", bg=PANEL_BG, fg=STOPPED, cursor="hand2",
-                         font=("Segoe UI", 9, "bold"))
-        close.pack(side="right")
-        close.bind("<Button-1>", lambda _e: self.quit())
 
         # estado
         status = tk.Frame(panel, bg=PANEL_BG)
@@ -182,7 +194,7 @@ class ClickForgeApp:
 
         win = tk.Toplevel(self.root)
         win.title("ClickForge — Configuración")
-        win.geometry("360x230")
+        win.geometry("360x320")
         win.resizable(False, False)
         win.configure(bg=PANEL_BG)
         win.attributes("-topmost", True)
@@ -201,8 +213,28 @@ class ClickForgeApp:
         spin.pack(side="right")
         spin.bind("<Return>", lambda _e: self._apply_settings())
 
-        tk.Label(win, text="Entre 1 y 100 clicks/s.\nSe aplica al instante y se guarda\npara la próxima vez que abras la app.",
-                 bg=PANEL_BG, fg=MUTED, justify="left").pack(pady=(12, 0), padx=28, anchor="w")
+        # tiempo total de ejecución (0 = infinito), con unidad seleccionable
+        row2 = tk.Frame(win, bg=PANEL_BG)
+        row2.pack(fill="x", padx=28, pady=(14, 0))
+        tk.Label(row2, text="Tiempo de ejecución:", bg=PANEL_BG, fg=PANEL_FG).pack(side="left")
+
+        self._dur_var = tk.DoubleVar(value=self._duration_in(self._duration_value, reverse=True))
+        dur_spin = tk.Spinbox(row2, from_=0, to=999, increment=1, width=5,
+                              textvariable=self._dur_var, command=self._apply_settings)
+        dur_spin.pack(side="right")
+        dur_spin.bind("<Return>", lambda _e: self._apply_settings())
+
+        self._unit_var = tk.StringVar(value=UNITS[self._duration_unit])
+        unit = ttk.Combobox(row2, textvariable=self._unit_var, state="readonly",
+                            values=list(UNITS.values()), width=9)
+        unit.pack(side="right", padx=6)
+        unit.bind("<<ComboboxSelected>>", lambda _e: self._apply_settings())
+
+        tk.Label(win, text="0 = sin límite (corre hasta que pulses F6).\n"
+                           "Ej.: 30 segundos, 5 minutos, 2 horas.\n"
+                           "La velocidad es de 1 a 100 clicks/s.\n"
+                           "Todo se guarda para la próxima vez.",
+                 bg=PANEL_BG, fg=MUTED, justify="left").pack(pady=(14, 0), padx=28, anchor="w")
 
         tk.Button(win, text="Listo", bg=RUNNING, fg="#0b0c10", relief="flat",
                   font=("Segoe UI", 10, "bold"), padx=18, pady=4, cursor="hand2",
@@ -210,14 +242,30 @@ class ClickForgeApp:
 
         self._settings = win
 
+    def _duration_in(self, value: float, reverse: bool = False) -> float:
+        """Convierte entre la unidad elegida y segundos."""
+        factor = UNIT_SECONDS[self._duration_unit]
+        return value / factor if reverse else value * factor
+
     def _apply_settings(self) -> None:
         try:
             cps = float(self._cps_var.get())
+            dur = float(self._dur_var.get())
         except (tk.TclError, ValueError):
             return
         cps = min(100.0, max(1.0, cps))
         self._cps_var.set(round(cps, 1))
         self._clicker.clicks_per_second = cps
+
+        unit = self._unit_var.get()
+        self._duration_unit = next(
+            (k for k, v in UNITS.items() if v == unit), "seconds"
+        )
+        dur = min(999.0, max(0.0, dur))
+        self._dur_var.set(dur)
+        self._duration_value = int(dur)
+        # 0 apaga el límite; si está corriendo, el nuevo tiempo cuenta desde ya
+        self._clicker.duration = self._duration_in(dur)
         self._save_config()
 
     def _cps_display(self) -> str:
@@ -249,13 +297,21 @@ class ClickForgeApp:
         try:
             data = json.loads(CONFIG_PATH.read_text(encoding="utf-8"))
             self._clicker.clicks_per_second = float(data["clicks_per_second"])
+            self._duration_value = max(0, int(data.get("duration_value", 0)))
+            if data.get("duration_unit") in UNITS:
+                self._duration_unit = data["duration_unit"]
+            self._clicker.duration = self._duration_in(self._duration_value)
         except (OSError, KeyError, ValueError, TypeError):
             pass  # sin config válida: se usa el valor por defecto
 
     def _save_config(self) -> None:
         try:
             CONFIG_PATH.write_text(
-                json.dumps({"clicks_per_second": self._clicker.clicks_per_second}),
+                json.dumps({
+                    "clicks_per_second": self._clicker.clicks_per_second,
+                    "duration_value": self._duration_value,
+                    "duration_unit": self._duration_unit,
+                }),
                 encoding="utf-8",
             )
         except OSError:
@@ -292,9 +348,14 @@ class ClickForgeApp:
 
         running = self._clicker.running
         cps_text = self._cps_display()
-        self._state_var.set(
-            f"ejecutando · {cps_text} clics/s · F6" if running else f"detenido · {cps_text} clics/s · F6"
-        )
+        state = f"ejecutando · {cps_text} clics/s" if running else f"detenido · {cps_text} clics/s"
+        remaining = self._clicker.remaining_seconds
+        if remaining is not None:
+            m, s = divmod(int(remaining), 60)
+            h, m = divmod(m, 60)
+            clock = f"{h:02}:{m:02}:{s:02}" if h else f"{m:02}:{s:02}"
+            state += f" · ⏳{clock}"
+        self._state_var.set(f"{state} · F6")
         if self.overlay is not None:
             self._dot.configure(fg=RUNNING if running else STOPPED)
             self._toggle_btn.configure(text="F6  Detener" if running else "F6  Iniciar")
