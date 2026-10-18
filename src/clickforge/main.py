@@ -79,7 +79,14 @@ class ClickForgeApp:
 
     # ---------------------------------------------------------- pantallas
     def _center(self, win: tk.Toplevel, width: int, height: int) -> None:
-        """Ubica la ventana justo en el centro de la pantalla."""
+        """Ubica la ventana en el centro exacto de la pantalla.
+
+        Se llama después de crear el contenido, así el tamaño real coincide
+        con el de la ventana y el centrado queda bien en cualquier pantalla.
+        """
+        win.update_idletasks()
+        width = max(width, win.winfo_reqwidth())
+        height = max(height, win.winfo_reqheight())
         x = max(0, (win.winfo_screenwidth() - width) // 2)
         y = max(0, (win.winfo_screenheight() - height) // 2)
         win.geometry(f"{width}x{height}+{x}+{y}")
@@ -87,7 +94,6 @@ class ClickForgeApp:
     def _show_guide(self) -> None:
         win = tk.Toplevel(self.root)
         win.title("ClickForge — Bienvenido")
-        self._center(win, 600, 620)
         win.resizable(False, False)
         win.configure(bg=PANEL_BG)
         win.protocol("WM_DELETE_WINDOW", self.quit)
@@ -134,6 +140,9 @@ class ClickForgeApp:
                   relief="flat", padx=14, pady=3, cursor="hand2",
                   command=self.quit).pack(pady=(10, 0))
 
+        # se centra al final, con el contenido ya creado, para que quede
+        # perfectamente centrada en cualquier pantalla
+        self._center(win, 600, 620)
         self.guide = win
 
     def _start_overlay(self) -> None:
@@ -230,7 +239,6 @@ class ClickForgeApp:
 
         win = tk.Toplevel(self.root)
         win.title("ClickForge — Configuración")
-        self._center(win, 400, 380)
         win.resizable(False, False)
         win.configure(bg=PANEL_BG)
         win.attributes("-topmost", True)
@@ -288,6 +296,8 @@ class ClickForgeApp:
                   font=("Segoe UI", 10, "bold"), padx=18, pady=4, cursor="hand2",
                   command=lambda: self._close_settings(win)).pack(pady=(14, 0))
 
+        # centrada al final, con el contenido ya creado
+        self._center(win, 400, 380)
         self._settings = win
 
     def _duration_in(self, value: float, reverse: bool = False) -> float:
@@ -486,7 +496,27 @@ class ClickForgeApp:
         self.root.destroy()
 
 
+def _enable_dpi_awareness() -> None:
+    """Hace la app consciente del escalado de Windows.
+
+    Sin esto, cuando el monitor usa un zoom distinto de 100 % las ventanas
+    quedan descentradas y con el texto borroso. En otros sistemas no hace nada.
+    """
+    try:
+        import ctypes
+    except ImportError:
+        return
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)  # por monitor (Win 8.1+)
+    except (AttributeError, OSError):
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()  # Windows antiguo
+        except (AttributeError, OSError):
+            pass
+
+
 def run() -> None:
+    _enable_dpi_awareness()
     root = tk.Tk()
     root.withdraw()
     ClickForgeApp(root)
