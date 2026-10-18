@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+*.spec
+
+# generado por tools/make_icon.py (opcional versionarlo)
+# assets/icon.ico
