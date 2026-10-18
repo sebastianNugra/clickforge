@@ -437,9 +437,9 @@ class ClickForgeApp:
             # mantener el atajo de la barra en sincronía (salvo que se esté escribiendo en él)
             if self._cps_quick is not None and self._cps_quick != self.root.focus_get():
                 self._cps_quick.delete(0, "end")
-                self._cps_quick.insert(0, cps_text)
+                self._cps_quick.insert(0, self._rate_display())
             if self._settings is not None and self._settings.winfo_exists():
-                self._cps_var.set(round(self._clicker.clicks_per_second, 1))
+                self._rate_var.set(round(self._rate_value, 2))
 
         self.root.after(80, self._tick)
 
