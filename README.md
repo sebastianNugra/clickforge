@@ -3,6 +3,15 @@
 App de escritorio (Windows) hecha con Python y tkinter: un autoclicker con
 **overlay de vidrio** discreto que no estorba mientras trabajas.
 
+<p align="center">
+  <a href="https://github.com/sebastianNugra/clickforge/releases/latest/download/ClickForge.exe">
+    <img src="https://img.shields.io/badge/%E2%AC%87%EF%B8%8F%20Descargar-ClickForge.exe-4ade80?style=for-the-badge" alt="Descargar ClickForge.exe">
+  </a>
+</p>
+
+> **¿Solo quieres usar la app?** Haz clic en el botón de arriba, descarga
+> `ClickForge.exe` y ábrelo. No necesitas instalar Python ni nada más.
+
 ## Características
 
 - Ventana de bienvenida con instrucciones paso a paso.
@@ -22,8 +31,7 @@ App de escritorio (Windows) hecha con Python y tkinter: un autoclicker con
 ## Cómo usarlo
 
 1. **Abre la app** (doble clic en `ClickForge.exe` o `clickforge`). Aparece la
-   ventana de bienvenida con las instrucciones.
-2. Pulsa **▶ Comenzar** (o **F8**). La bienvenida se cierra y queda una barra
+   ventana de bienvenida con las instrucciones.2. Pulsa **▶ Comenzar** (o **F8**). La bienvenida se cierra y queda una barra
    pequeña y translúcida arriba en la pantalla.
 3. **Captura el punto:** coloca el mouse justo sobre el lugar donde quieres
    hacer clic y pulsa **F8**. La barra muestra las coordenadas capturadas.
@@ -61,7 +69,12 @@ python src\clickforge\main.py
 
 ## Ejecutable (.exe)
 
-Se genera con [PyInstaller](https://pyinstaller.org/) (incluido en el extra `dev`):
+La versión lista para usar está publicada en
+**[Releases](https://github.com/sebastianNugra/clickforge/releases/latest)**:
+descarga `ClickForge.exe` y ábrelo.
+
+Para generarlo tú mismo con [PyInstaller](https://pyinstaller.org/)
+(incluido en el extra `dev`):
 
 ```powershell
 .venv\Scripts\pip install -e .[dev]
