@@ -1,0 +1,26 @@
+[project]
+name = "clickforge"
+version = "0.1.0"
+description = "Autoclicker de escritorio con overlay discreto, atajos globales y vista de clicks por segundo"
+readme = "README.md"
+license = { text = "MIT" }
+requires-python = ">=3.10"
+dependencies = [
+    "pynput>=1.7",
+]
+
+[project.gui-scripts]
+clickforge = "clickforge.main:run"
+
+[project.optional-dependencies]
+dev = [
+    "pyinstaller>=6.0",
+    "pillow>=10.0",  # solo para tools/make_icon.py
+]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
