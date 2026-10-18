@@ -23,6 +23,10 @@ App de escritorio (Windows) hecha con Python y tkinter.
 - **Tiempo de ejecución configurable**: segundos, minutos u horas
   (0 = sin límite). Si pones, por ejemplo, 5 minutos, el autoclicker se
   detiene solo al terminar el tiempo.
+- La barra muestra una **fila con reloj de arena `⏳`** y el **tiempo restante**
+  antes de que se detenga; si no hay límite, indica *sin límite de tiempo*.
+- El **punto indicador** es rojo cuando está detenido y **verde** mientras se
+  ejecuta, en todos los arranques.
 - La configuración se guarda en `~/.clickforge.json` y se recuerda al volver
   a abrir la app.
 - Botón de salida en **cuadro rojo con ✗** en la esquina superior derecha de
@@ -31,7 +35,8 @@ App de escritorio (Windows) hecha con Python y tkinter.
 ## Cómo usarlo
 
 1. **Abre la app** (doble clic en `ClickForge.exe` o `clickforge`). Aparece la
-   ventana de bienvenida con las instrucciones.2. Pulsa **▶ Comenzar** (o **F8**). La bienvenida se cierra y queda una barra
+   ventana de bienvenida con las instrucciones, **centrada en la pantalla**.
+2. Pulsa **▶ Comenzar** (o **F8**). La bienvenida se cierra y queda una barra
    pequeña y translúcida arriba en la pantalla.
 3. **Captura el punto:** coloca el mouse justo sobre el lugar donde quieres
    hacer clic y pulsa **F8**. La barra muestra las coordenadas capturadas.
@@ -44,8 +49,9 @@ App de escritorio (Windows) hecha con Python y tkinter.
    la esquina de la barra.
 6. **Tiempo de ejecución** (⚙): segundos, minutos u horas; 0 = sin límite.
    Todo se aplica al instante y se guarda.
-7. **Tiempo restante:** si configuraste un tiempo, la barra muestra un
-   contador `⏳mm:ss` y el autoclicker se detiene solo al llegar a cero.
+7. **Tiempo restante:** si configuraste un tiempo, la barra muestra una fila
+   con `⏳` y el tiempo que falta, y el autoclicker se detiene solo al llegar
+   a cero (sin esperar al siguiente clic).
 8. **Salir:** el **cuadro rojo con ✗** en la esquina superior derecha de la
    barra, o el botón rojo *⏻ Salir de ClickForge* en la bienvenida.
 
