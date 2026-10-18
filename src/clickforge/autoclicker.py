@@ -20,6 +20,7 @@ class AutoClicker:
         self.duration = 0.0  # duración total en segundos; 0 = sin límite
         self._started_at: float | None = None
 
+    # ------------------------------------------------------------- ritmo
     @property
     def interval(self) -> float:
         return self._interval
@@ -37,17 +38,25 @@ class AutoClicker:
     def clicks_per_second(self, value: float) -> None:
         self.interval = 1.0 / max(0.001, value)
 
+    # --------------------------------------------------------------- estado
     @property
     def running(self) -> bool:
-        return self._thread is not None and self._thread.is_alive()
+        """True mientras el hilo de clics está vivo."""
+        thread = self._thread
+        return thread is not None and thread.is_alive()
 
     @property
     def remaining_seconds(self) -> float | None:
-        """Segundos restantes de la duración; None si no hay límite."""
+        """Segundos restantes de la duración; None si no hay límite.
+
+        Mientras corre devuelve el tiempo que falta; detenido devuelve el
+        total configurado (así la barra siempre lo muestra antes de empezar).
+        """
         if self.duration <= 0:
             return None
-        if self.running and self._started_at is not None:
-            return max(0.0, self.duration - (time.monotonic() - self._started_at))
+        started = self._started_at
+        if self.running and started is not None:
+            return max(0.0, self.duration - (time.monotonic() - started))
         return self.duration
 
     def capture_point(self) -> None:
@@ -69,23 +78,33 @@ class AutoClicker:
         self._thread.start()
 
     def stop(self) -> None:
-        if not self.running:
+        thread = self._thread
+        if thread is None or not thread.is_alive():
+            self._thread = None
+            self._started_at = None
             return
         self._stop.set()
-        assert self._thread is not None
-        self._thread.join(timeout=2)
+        thread.join(timeout=2.0)
         self._thread = None
         self._started_at = None
 
     def _loop(self) -> None:
         assert self.point is not None
         x, y = self.point
-        while not self._stop.is_set():
-            # se agotó la duración configurada: termina solo
-            if self.duration > 0 and self._started_at is not None:
-                if time.monotonic() - self._started_at >= self.duration:
-                    self._stop.set()
-                    break
-            self._mouse.position = (x, y)
-            self._mouse.click(mouse.Button.left, 1)
-            self._stop.wait(self.interval)
+        try:
+            while not self._stop.is_set():
+                wait = self._interval
+                if self.duration > 0 and self._started_at is not None:
+                    left = self.duration - (time.monotonic() - self._started_at)
+                    if left <= 0:
+                        break  # se agotó el tiempo: termina solo
+                    # no dormir más de lo que falta, así se detiene a tiempo
+                    wait = min(wait, left)
+                self._mouse.position = (x, y)
+                self._mouse.click(mouse.Button.left, 1)
+                self._stop.wait(wait)
+        finally:
+            # al terminar (por F6 o por tiempo) deja todo listo para
+            # volver a empezar desde cero
+            self._thread = None
+            self._started_at = None
