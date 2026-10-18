@@ -61,10 +61,16 @@ class ClickForgeApp:
         root.after(80, self._tick)
 
     # ---------------------------------------------------------- pantallas
+    def _center(self, win: tk.Toplevel, width: int, height: int) -> None:
+        """Ubica la ventana justo en el centro de la pantalla."""
+        x = max(0, (win.winfo_screenwidth() - width) // 2)
+        y = max(0, (win.winfo_screenheight() - height) // 2)
+        win.geometry(f"{width}x{height}+{x}+{y}")
+
     def _show_guide(self) -> None:
         win = tk.Toplevel(self.root)
         win.title("ClickForge — Bienvenido")
-        win.geometry("580x560")
+        self._center(win, 580, 560)
         win.resizable(False, False)
         win.configure(bg=PANEL_BG)
         win.protocol("WM_DELETE_WINDOW", self.quit)
@@ -194,7 +200,7 @@ class ClickForgeApp:
 
         win = tk.Toplevel(self.root)
         win.title("ClickForge — Configuración")
-        win.geometry("360x320")
+        self._center(win, 360, 320)
         win.resizable(False, False)
         win.configure(bg=PANEL_BG)
         win.attributes("-topmost", True)
