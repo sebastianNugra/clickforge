@@ -1,7 +1,6 @@
 # ClickForge
 
-App de escritorio (Windows) hecha con Python y tkinter: un autoclicker con
-**overlay de vidrio** discreto que no estorba mientras trabajas.
+App de escritorio (Windows) hecha con Python y tkinter.
 
 <p align="center">
   <a href="https://github.com/sebastianNugra/clickforge/releases/latest/download/ClickForge.exe">
@@ -14,7 +13,7 @@ App de escritorio (Windows) hecha con Python y tkinter: un autoclicker con
 
 ## Características
 
-- Ventana de bienvenida con instrucciones paso a paso.
+- Ventana de bienvenida con instrucciones paso a paso, centrada en pantalla.
 - Overlay translúcido, sin bordes, siempre encima y arrastrable.
 - **F8** → comenzar / capturar el punto de clic (posición actual del mouse).
 - **F6** → iniciar / detener el autoclicker (globales, funcionan sin foco).
