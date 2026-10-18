@@ -8,6 +8,7 @@ Teclas globales:
 from __future__ import annotations
 
 import json
+import math
 import tkinter as tk
 from pathlib import Path
 from tkinter import ttk
@@ -25,6 +26,7 @@ RUNNING = "#4ade80"
 STOPPED = "#f87171"
 
 OVERLAY_W = 320
+OVERLAY_H = 156
 CONFIG_PATH = Path.home() / ".clickforge.json"
 
 # unidades de tiempo: clave interna -> etiqueta en la UI
@@ -54,6 +56,11 @@ class ClickForgeApp:
         self._settings: tk.Toplevel | None = None
         self._cps_quick: tk.Entry | None = None
         self._rate_unit_label: tk.Label | None = None
+        self._timer_label: tk.Label | None = None
+        self._timer_var = tk.StringVar(value="")
+        # los atajos se pulsan en otro hilo; la bandera pide abrir el overlay
+        # sin tocar Tk desde ese hilo
+        self._want_overlay = False
 
         self._load_config()
 
@@ -99,8 +106,9 @@ class ClickForgeApp:
             ("4.", "El ritmo se ajusta en la barra (escribe los clics en la esquina)\n"
                    "o en ⚙ Configuración: por segundo, minuto u hora.\n"
                    "Ej.: 30 clics por minuto = 1 clic cada 2 segundos."),
-            ("5.", "En ⚙ también defines el tiempo de ejecución (segundos, minutos\n"
-                   "u horas; 0 = sin límite) y la app se detiene sola al terminar."),
+            ("5.", "En ⚙ defines el tiempo de ejecución (segundos, minutos u horas;\n"
+                   "0 = sin límite). La barra muestra un ⏳ con el tiempo restante\n"
+                   "y la app se detiene sola al llegar a cero."),
             ("6.", "Para salir: el cuadro rojo con ✗ en la esquina superior derecha."),
         ]
         box = tk.Frame(win, bg=PANEL_BG)
@@ -187,6 +195,13 @@ class ClickForgeApp:
             row=1, column=1, sticky="w", padx=6, pady=(2, 0))
         status.columnconfigure(1, weight=1)
 
+        # tiempo restante: el reloj de arena aparece cuando hay tiempo puesto
+        timer = tk.Frame(panel, bg=PANEL_BG)
+        timer.pack(fill="x", padx=10, pady=(4, 0))
+        self._timer_label = tk.Label(timer, textvariable=self._timer_var, bg=PANEL_BG,
+                                     fg=MUTED, font=("Segoe UI", 10, "bold"))
+        self._timer_label.pack(anchor="w")
+
         # botones de respaldo (por si no quieres usar el teclado)
         buttons = tk.Frame(panel, bg=PANEL_BG)
         buttons.pack(fill="x", padx=10, pady=(8, 8))
@@ -197,12 +212,13 @@ class ClickForgeApp:
         self._toggle_btn.pack(side="left", expand=True, fill="x", padx=(6, 0))
 
         # arrastrable desde cualquier zona del panel
-        for widget in (win, panel, title, status, buttons, self._dot):
+        for widget in (win, panel, title, status, timer, buttons, self._dot):
             widget.bind("<Button-1>", self._drag_start)
             widget.bind("<B1-Motion>", self._drag_move)
 
-        x = (win.winfo_screenwidth() - OVERLAY_W) // 2
-        win.geometry(f"{OVERLAY_W}x120+{x}+36")
+        win.update_idletasks()
+        x = max(0, (win.winfo_screenwidth() - OVERLAY_W) // 2)
+        win.geometry(f"{OVERLAY_W}x{OVERLAY_H}+{x}+36")
         self.overlay = win
 
     # ------------------------------------------------------------- lógica
@@ -273,11 +289,6 @@ class ClickForgeApp:
                   command=lambda: self._close_settings(win)).pack(pady=(14, 0))
 
         self._settings = win
-
-    def _duration_in(self, value: float, reverse: bool = False) -> float:
-        """Convierte entre la unidad elegida y segundos."""
-        factor = UNIT_SECONDS[self._duration_unit]
-        return value / factor if reverse else value * factor
 
     def _duration_in(self, value: float, reverse: bool = False) -> float:
         """Convierte entre la unidad elegida y segundos."""
@@ -403,18 +414,37 @@ class ClickForgeApp:
             )
 
     def _on_f8(self) -> None:
-        """F8 desde la bienvenida empieza la app; ya dentro, captura el punto."""
+        """F8 desde la bienvenida empieza la app; ya dentro, captura el punto.
+
+        Ojo: pynput llama a esto desde otro hilo, por eso no se toca Tk aquí;
+        la bandera `_want_overlay` hace que `_tick` lo abra en el hilo principal.
+        """
         if self.overlay is None:
-            self.root.after(0, self._start_overlay)
+            self._want_overlay = True
         self._clicker.capture_point()
 
     def _on_f6(self) -> None:
         """F6 desde la bienvenida también empieza la app."""
         if self.overlay is None:
-            self.root.after(0, self._start_overlay)
+            self._want_overlay = True
         self._clicker.toggle()
 
     def _tick(self) -> None:
+        """Refresca la barra y se vuelve a programar siempre, pase lo que pase."""
+        try:
+            self._refresh()
+        except Exception:
+            # un error puntual no debe apagar el refresco de la barra
+            pass
+        finally:
+            self.root.after(80, self._tick)
+
+    def _refresh(self) -> None:
+        # atajos pulsados fuera del hilo de Tk: aquí sí se puede abrir el overlay
+        if self._want_overlay and self.overlay is None:
+            self._want_overlay = False
+            self._start_overlay()
+
         if self._clicker.point is None:
             self._point_var.set("sin capturar  ·  F8")
         else:
@@ -423,25 +453,32 @@ class ClickForgeApp:
 
         running = self._clicker.running
         rate = f"{self._rate_display()} clics/{UNIT_SHORT[self._rate_unit]}"
-        state = f"ejecutando · {rate}" if running else f"detenido · {rate}"
+        self._state_var.set(("ejecutando" if running else "detenido") + f" · {rate} · F6")
+
+        # fila del reloj de arena con el tiempo restante antes de terminar
         remaining = self._clicker.remaining_seconds
-        if remaining is not None:
-            m, s = divmod(int(remaining), 60)
+        if remaining is None:
+            self._timer_var.set("⏳  sin límite de tiempo")
+            color = MUTED
+        else:
+            total = int(math.ceil(max(0.0, remaining)))
+            m, s = divmod(total, 60)
             h, m = divmod(m, 60)
             clock = f"{h:02}:{m:02}:{s:02}" if h else f"{m:02}:{s:02}"
-            state += f" · ⏳{clock}"
-        self._state_var.set(f"{state} · F6")
+            self._timer_var.set(f"⏳  restante: {clock}")
+            color = RUNNING if running else PANEL_FG
+        if self._timer_label is not None:
+            self._timer_label.configure(fg=color)
+
         if self.overlay is not None:
             self._dot.configure(fg=RUNNING if running else STOPPED)
             self._toggle_btn.configure(text="F6  Detener" if running else "F6  Iniciar")
-            # mantener el atajo de la barra en sincronía (salvo que se esté escribiendo en él)
+            # mantener el atajo de la barra en sincronía (salvo que se escriba en él)
             if self._cps_quick is not None and self._cps_quick != self.root.focus_get():
                 self._cps_quick.delete(0, "end")
                 self._cps_quick.insert(0, self._rate_display())
             if self._settings is not None and self._settings.winfo_exists():
                 self._rate_var.set(round(self._rate_value, 2))
-
-        self.root.after(80, self._tick)
 
     def quit(self) -> None:
         self._clicker.stop()
